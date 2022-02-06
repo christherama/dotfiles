@@ -9,9 +9,11 @@ else
 fi
 
 # Install powerlevel10k
+POWERLEVEL_PROMPT=0
 if [ -d "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k" ]; then
   echo "Powerlevel10k is installed. Skipping"
 else
+  POWERLEVEL_PROMPT=1
   echo "Installing Powerlevel10k..."
   git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
 fi
@@ -35,3 +37,10 @@ else
   brew install neovim
 fi
 
+# Symlink config files
+ln -sf "$(pwd)/.zshrc" "$HOME/.zshrc"
+
+# Next steps
+if [ $POWERLEVEL_PROMPT -eq 1 ]; then
+  echo "To set up Powerlevel10k, use the following command:\e  source ~/.zshrc"
+fi
