@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+# Install oh-my-zsh
+if [ -d "$HOME/.oh-my-zsh" ]; then 
+  echo "Oh My Zsh is installed. Skipping."
+else
+  echo "Installing Oh My Zsh..."
+  curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh
+fi
+
+# Install powerlevel10k
+if [ -d "${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k" ]; then
+  echo "Powerlevel10k is installed. Skipping"
+else
+  echo "Installing Powerlevel10k..."
+  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
+fi
+
+# Install neovim
+if [ -f /usr/local/bin/nvim]; then
+  echo "Neovim is installed. Skipping."
+else
+  echo "Installing Neovim..."
+  curl -LO https://github.com/neovim/neovim/releases/download/nightly/nvim-macos.tar.gz
+  tar xzf nvim-macos.tar.gz
+  cp ./nvim-osx64/bin/nvim /usr/local/bin/nvim
+  rm nvim-macos.tar.gz
+  rm -rf ./nvim-osx64
+fi
+
+# Install homebrew
+if [ -f /opt/homebrew/bin/brew ]; then
+  echo "Homebrew is installed. Skipping."
+else
+  echo "Installing Homebrew..."
+  curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+  echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+  eval $(/opt/homebrew/bin/brew shellenv)
+fi
+
