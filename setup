@@ -52,6 +52,25 @@ else
   brew install neovim
 fi
 
+# Install nvm
+if [ -d "$NVM_DIR" ]; then
+  echo "nvm is installed. Skipping."
+else
+  echo "Installing nvm..."
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
+fi
+
+which npm &> /dev/null
+if [ $? -eq 0 ]; then
+  echo "Node already installed. Skipping."
+else
+  echo "Installing latest version of node..."
+  zsh
+  nvm install node 16.14.0
+  nvm use 16.14.0
+fi
+
+
 # Symlink config files
 ln -sf "$(pwd)/.zshrc" "$HOME/.zshrc"
 mkdir -p "$HOME/.config/nvim/vim-plug"
