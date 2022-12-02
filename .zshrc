@@ -27,6 +27,15 @@ plugins=(
 source $ZSH/oh-my-zsh.sh
 
 alias vim="nvim"
+alias k="kubectl"
+
+srcenv() {
+  # Local .env
+  if [ -f .env ]; then
+    # Load Environment Variables
+    export $(cat .env | grep -v '#' | sed 's/\r$//' | awk '/=/ {print $1}' )
+  fi
+}
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
@@ -43,3 +52,7 @@ if [ $? -eq 0 ]; then
   eval "$(pyenv init --path)"
 fi
 
+# Add pg_config to PATH for Postgres client use
+export PATH="$(brew --prefix libpq)/bin:$PATH"
+
+export PATH="/opt/homebrew/opt/openssl@3/bin:$PATH"
