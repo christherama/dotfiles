@@ -2,7 +2,7 @@
 
 This repo is meant to provide default configs for setting up a local environment on MacOS.
 
-## Steps
+## Steps (needs updating for LazyVim)
 
 1. Clone this repo
 1. Navigate to the root of the newly cloned repo

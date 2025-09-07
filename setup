@@ -72,10 +72,8 @@ fi
 
 
 # Symlink config files
-ln -sf "$(pwd)/.zshrc" "$HOME/.zshrc"
-mkdir -p "$HOME/.config/nvim/vim-plug"
-ln -sf "$(pwd)/plugins.vim" "$HOME/.config/nvim/vim-plug/plugins.vim"
-ln -sf "$(pwd)/init.vim" "$HOME/.config/nvim/init.vim"
+ln -sf "$(pwd)/.zshrc" "${HOME}/.zshrc"
+ln -sf "$(pwd)/nvim" "${HOME}/.config/nvim"
 
 # Next steps
 if [ $POWERLEVEL_PROMPT -eq 1 ]; then
