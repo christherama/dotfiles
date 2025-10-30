@@ -64,6 +64,53 @@ function pr-test-failures() {
     fly -t consumer builds -j spothero-django-prs/number:$1/test-pull-request | rg -m 1 failed | choose 0 | rush -- "fly -t consumer watch -b {} |  rg -o '(FAIL|ERROR): (\w+) \((.*)\)'" | sort | uniq
 }
 
+function mypy-by-error() {
+  write_to_file="false"
+  diff="false"
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -e|--error-code)
+        error_code="$2"
+        shift
+        shift
+        ;;
+      -d|--diff)
+        diff="true"
+        shift
+        ;;
+      -w|--write-to-file)
+        write_to_file="true"
+        shift
+        ;;
+      -*|--*)
+        echo "unknown option $1"
+        exit 1
+        ;;
+    esac
+  done
+
+  if [[ -z "$error_code" ]]; then
+    echo "must specify an error code, for example mypy-by-type unused-ignore"
+    exit 1
+  fi
+  rg_args=("error:\\s.*\\[$error_code\\]$")
+
+  output_file="mypy.$error_code.log"
+  if [[ "$write_to_file" == "true" ]]; then
+    if [[ "$diff" == "true" ]]; then
+      echo "--write-to-file and --diff cannot be used together"
+      exit 1;
+    fi
+    dmypy run | rg "${rg_args[@]}" | sort > "$output_file"
+    echo "Wrote $(wc -l < $output_file | xargs) lines to $output_file"
+  elif [[ "$diff" == "true" ]]; then
+    diff -c "$output_file" <(dmypy run | rg "${rg_args[@]}" | sort) --color=always | less
+  else
+    rg_args+=("--color" "always")
+    dmypy run | rg "${rg_args[@]}" | sort
+  fi
+}
+
 function codeowner-prs() {
   gh api graphql -f query='
   query {
