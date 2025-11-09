@@ -64,21 +64,28 @@ function pr-test-failures() {
     fly -t consumer builds -j spothero-django-prs/number:$1/test-pull-request | rg -m 1 failed | choose 0 | rush -- "fly -t consumer watch -b {} |  rg -o '(FAIL|ERROR): (\w+) \((.*)\)'" | sort | uniq
 }
 
-function mypy-by-error() {
+function mypy-by() {
   write_to_file="false"
   diff="false"
+  directory="."
+  error_code="false"
   while [[ $# -gt 0 ]]; do
     case $1 in
-      -e|--error-code)
+      --error-code)
         error_code="$2"
         shift
         shift
         ;;
-      -d|--diff)
+      --dir)
+        directory="$2"
+        shift
+        shift
+        ;;
+      --diff)
         diff="true"
         shift
         ;;
-      -w|--write-to-file)
+      --write-to-file)
         write_to_file="true"
         shift
         ;;
@@ -93,21 +100,30 @@ function mypy-by-error() {
     echo "must specify an error code, for example mypy-by-type unused-ignore"
     exit 1
   fi
+  mypy_args=("--" "$directory")
   rg_args=("error:\\s.*\\[$error_code\\]$")
 
-  output_file="mypy.$error_code.log"
+  error_code_file_token=""
+  if [[ "$error_code" != "false" ]]; then
+    error_code_file_token=".${error_code}"
+  fi
+  dir_file_token=""
+  if [[ "$directory" != "." ]]; then
+    dir_file_token=".dir"
+  fi
+  output_file="mypy${error_code_file_token}${dir_file_token}.log"
   if [[ "$write_to_file" == "true" ]]; then
     if [[ "$diff" == "true" ]]; then
       echo "--write-to-file and --diff cannot be used together"
       exit 1;
     fi
-    dmypy run | rg "${rg_args[@]}" | sort > "$output_file"
+    dmypy run "${mypy_args[@]}" | rg "${rg_args[@]}" | sort > "$output_file"
     echo "Wrote $(wc -l < $output_file | xargs) lines to $output_file"
   elif [[ "$diff" == "true" ]]; then
-    diff -c "$output_file" <(dmypy run | rg "${rg_args[@]}" | sort) --color=always | less
+    diff -c "$output_file" <(dmypy run "${mypy_args[@]}" | rg "${rg_args[@]}" | sort) --color=always | less
   else
     rg_args+=("--color" "always")
-    dmypy run | rg "${rg_args[@]}" | sort
+    dmypy run "${mypy_args[@]}" | rg "${rg_args[@]}" | sort
   fi
 }
 
@@ -315,8 +331,10 @@ export PATH="$GOPATH/bin:$PATH"
 . /opt/homebrew/opt/asdf/libexec/asdf.sh
 export TELEPORT_AUTH=onelogin TELEPORT_PROXY=spothero-cloud.teleport.sh
 
-export PATH=$PATH:~/.shoehorn/git-repo/bin
+export PATH="$PATH:~/.shoehorn/git-repo/bin"
 eval "$(direnv hook zsh)"
+
+export PATH="$PATH:$HOME/.config/emacs/bin"
 
 # Teleport stuff
 export GOPROXY= # intentially unset GOPROXY for local builds
