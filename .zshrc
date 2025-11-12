@@ -61,7 +61,35 @@ function set-django-pr-pipe() {
 }
 
 function pr-test-failures() {
-    fly -t consumer builds -j spothero-django-prs/number:$1/test-pull-request | rg -m 1 failed | choose 0 | rush -- "fly -t consumer watch -b {} |  rg -o '(FAIL|ERROR): (\w+) \((.*)\)'" | sort | uniq
+  # Writes test failures from a specified PR number to a file named failures.log
+  fly -t consumer builds -j spothero-django-prs/number:$1/test-pull-request | rg -m 1 failed | choose 0 | rush -- "fly -t consumer watch -b {} |  rg -o '(FAIL|ERROR): (\w+) \((.*)\)'" | sort | uniq > failures.log
+  num_failures=$(cat failures.log | wc -l | xargs)
+  echo "Wrote $num_failures tests to failures.log"
+}
+
+function run-first-failure() {
+  # Runs the first test listed in the failure produced from the above output that's been written to a file named failures.log
+  remove_passing_test="false"
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -r|--remove-passing-test)
+        remove_passing_test="true"
+        shift
+        ;;
+      -*|--*)
+        echo "unknown option $1"
+        exit 1
+        ;;
+    esac
+  done
+  test_to_run=$(head -n 1 failures.log | rg '\s\((.*)\)$' -or '$1')
+  echo "Running $test_to_run"
+  if python manage.py test --keepdb "$test_to_run"; then
+    if [[ "$remove_passing_test" == "true" ]]; then
+      sed -i '' '1d' failures.log
+    fi
+  fi
+
 }
 
 function mypy-by() {
