@@ -55,6 +55,80 @@ kcron () {
   kubectl get pod --sort-by=.status.startTime --all-namespaces | grep $2 | tail -n 1 | awk '{system("kubectl logs -n "$1" "$2)}'
 }
 
+function diff-helm-template() {
+  # Use this to compare a specified helm template between the latest commit of your local git branch
+  # and the latest commit of another branch (default main).
+  #
+  # Usage:
+  #   diff-helm-template <chart-dir-path> <template-file-name> <values-environment> <optional-branch-name>
+  #
+  # Example usages:
+  #
+  #   # Compare production deployments between current branch and main
+  #   diff-helm-template charts/consumer-web deployment.yaml prd
+  #
+  #   # Compare staging service between current branch and monp-1234
+  #   diff-helm-template charts/spothero-django service.yaml stg monp-1234
+
+  CHART_DIR=$1
+  TEMPLATE=$2
+  VALUES_ENV=$3
+
+  BASE_BRANCH=${4:-main}
+  CURRENT_BRANCH=$(git branch --show-current)
+
+  BASE_WORKTREE="/tmp/helm-test-base-$$"
+  BRANCH_WORKTREE="/tmp/helm-test-branch-$$"
+  
+  BASE_TEMPLATE="${BASE_WORKTREE}/tmp/${TEMPLATE}"
+  BRANCH_TEMPLATE="${BRANCH_WORKTREE}/tmp/${TEMPLATE}"
+
+  if [[ "$VALUES_ENV" == "sbx" ]]; then
+    VALUES_FILE="values.yaml"
+  else
+    VALUES_FILE="values-${VALUES_ENV}.yaml"
+  fi
+
+  cleanup_worktrees() {
+    echo "Cleaning up..."
+    git worktree remove --force "$BASE_WORKTREE" 2>/dev/null || true
+    git worktree remove --force "$BRANCH_WORKTREE" 2>/dev/null || true
+  }
+
+  echo "Creating temporary worktrees..."
+  git worktree add "$BASE_WORKTREE" "$BASE_BRANCH"
+  mkdir "${BASE_WORKTREE}/tmp"
+  git worktree add "$BRANCH_WORKTREE" HEAD
+  mkdir "${BRANCH_WORKTREE}/tmp"
+
+  echo "Removing requirements.yaml since dependencies aren't needed..."
+  rm -f "${BASE_WORKTREE}/${CHART_DIR}/requirements.yaml"
+  rm -f "${BRANCH_WORKTREE}/${CHART_DIR}/requirements.yaml"
+
+  echo "Generating ${TEMPLATE} files..."
+
+  helm template release-name "${BASE_WORKTREE}/${CHART_DIR}" \
+    -f "${BASE_WORKTREE}/${CHART_DIR}/${VALUES_FILE}" \
+    --show-only "templates/${TEMPLATE}" > "${BASE_TEMPLATE}"
+
+  helm template release-name "${BRANCH_WORKTREE}/${CHART_DIR}" \
+    -f "${BRANCH_WORKTREE}/${CHART_DIR}/${VALUES_FILE}" \
+    --show-only "templates/${TEMPLATE}" > "${BRANCH_TEMPLATE}"
+
+  echo "Comparing templates..."
+  if diff "${BASE_TEMPLATE}" "${BRANCH_TEMPLATE}" >/dev/null; then
+    echo "✅ Templates are identical"
+    cleanup_worktrees
+    return 0
+  else
+    echo "❌ Templates differ:"
+    git --no-pager diff --no-index --color=always "${BASE_TEMPLATE}" "${BRANCH_TEMPLATE}" || true
+    echo "---"
+    cleanup_worktrees
+    return 1
+  fi
+}
+
 function set-django-pr-pipe() {
     bin/showpipe consumer spothero-django &>/dev/null && \
     while true; do fly -t consumer sp -p spothero-django-prs --instance-var number=$1 -c - < pr-pipeline.norender.yaml; sleep 5; done
