@@ -144,10 +144,15 @@ function pr-test-failures() {
 function run-first-failure() {
   # Runs the first test listed in the failure produced from the above output that's been written to a file named failures.log
   remove_passing_test="false"
+  test_args=("--keepdb")
   while [[ $# -gt 0 ]]; do
     case $1 in
       -r|--remove-passing-test)
         remove_passing_test="true"
+        shift
+        ;;
+      --pdb)
+        test_args+=("--pdb")
         shift
         ;;
       -*|--*)
@@ -158,12 +163,11 @@ function run-first-failure() {
   done
   test_to_run=$(head -n 1 failures.log | rg '\s\((.*)\)$' -or '$1')
   echo "Running $test_to_run"
-  if python manage.py test --keepdb "$test_to_run"; then
+  if python manage.py test "${test_args[@]}" "$test_to_run"; then
     if [[ "$remove_passing_test" == "true" ]]; then
       sed -i '' '1d' failures.log
     fi
   fi
-
 }
 
 function mypy-by() {
@@ -309,75 +313,6 @@ function reviews() {
   done
 }
 
-
-# pg() {
-#   emulate -L zsh          # localise zsh options, keep your login shell safe
-#   setopt kshcoprocess     # turn on Bash/ksh-style coprocesses
-#   set -euo pipefail
-#
-#   DB_ALIAS=${1:?usage: pg <prd>}
-#   case $DB_ALIAS in
-#     prd)
-#       DB=prd-monolith-reader
-#       DB_NAME=spothero_production
-#       DB_USER=teleport_reader
-#       ;;
-#     *)
-#       print -u2 "Unknown database – try: tsh db ls"
-#       return 1
-#       ;;
-#   esac
-#
-#   tsh db login "$DB" --db-name="$DB_NAME" --db-user="$DB_USER"
-#
-#   coproc TUNNEL { tsh proxy db --tunnel "$DB" --port 0 2>&1 }
-#   trap 'kill -9 $TUNNEL_PID 2>/dev/null' EXIT
-#
-#   sleep 0.5
-#
-#   local line port
-#   while read -r line <&p; do
-#     if [[ $line =~ (localhost|127\.0\.0\.1):([0-9]+) ]]; then
-#       port=${match[2]}
-#       break
-#     fi
-#   done
-#
-#   export PGHOST=localhost PGPORT=$port PGUSER=$DB_USER PGDATABASE=$DB_NAME
-#   pgcli
-# }
-
-pg1() {
-  set -eu
-
-  DB_ALIAS=$1
-  db_port="55432"
-
-  case $DB_ALIAS in
-    prd)
-      DB=prd-monolith-reader
-      DB_NAME=spothero_production
-      DB_USER=teleport_reader
-      ;;
-    *)
-      print -u2 "Unknown database – try: tsh db ls"
-      return 1
-      ;;
-  esac
-
-  tsh db login "$DB" --db-user="$DB_USER" --db-name="$DB_NAME"
-
-  # trap 'pkill -P $$' SIGINT SIGTERM
-
-  tsh proxy db --port "$db_port" --tunnel --db-user="$DB_USER" --db-name="$DB_NAME" "$DB" >/dev/null 2>&1 &
-  local TSH_PID=$! 
-  sleep 2  # give time for teleport proxy to connect.
-
-  export PGHOST=localhost PGPORT=$db_port PGUSER=$DB_USER PGDATABASE=$DB_NAME
-  pgcli
-  pkill -P "$TSH_PID"  # kill the teleport proxy
-}
-
 pg() {
   set -eu
 
@@ -458,23 +393,57 @@ alias java-12="export JAVA_HOME=`/usr/libexec/java_home -v 12`; java -version"
 source $HOME/.spothero/cloud-ob/init.sh # load bearing comment FORTMARLENE --spothero/cloud-onboarding
 
 export AWS_PROFILE=hub
-function sbx {
+
+function sbx (){
   # Example usage:
   #   # With SFDC and Celery disabled
-  #   sbx chris-htools-1234 pr-9876
+  #   sbx --name chris-htools-1234 --tag pr-9876
   #
   #   # With SFDC and Celery enabled
-  #   sbx chris-htools-1234 pr-9876 true true
+  #   sbx --name chris-htools-1234 --tag pr-9876 --celery --sfdc
 
-  NAME=$1
-  IMAGE_TAG=$2
-  SALESFORCE_ENABLED=${3:-false}
-  CELERY_ENABLED=${4:-false}
-  if [ "$CELERY_ENABLED" = "false" ]; then
-    CELERY_ALWAYS_EAGER=true
-  else
-    CELERY_ALWAYS_EAGER=false
+  local NAME
+  local IMAGE_TAG
+  local CELERY_ENABLED="false"
+  local CELERY_ALWAYS_EAGER="true"
+  local SALESFORCE_ENABLED="false"
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -n|--name)
+        NAME="$2"
+        shift
+        shift
+        ;;
+      -t|--tag)
+        IMAGE_TAG="$2"
+        shift
+        shift
+        ;;
+      --celery)
+        CELERY_ENABLED="true"
+        CELERY_ALWAYS_EAGER="false"
+        shift
+        ;;
+      --sfdc)
+        SALESFORCE_ENABLED="true"
+        shift
+        ;;
+      -*|--*)
+        echo "unknown option $1"
+        exit 1
+        ;;
+    esac
+  done
+
+  if [[ -z "${NAME:-}" ]]; then
+    echo "Must specify a sandbox name with --name"
+    return 1
   fi
+  if [[ -z "${IMAGE_TAG:-}" ]]; then
+    echo "Must specify a spothero-django image tag with --tag"
+    return 1
+  fi
+
   tawsexec --app hub helm-sops upgrade --install --kube-context sbx --namespace consumer $NAME charts/spothero-django --set image.tag=$IMAGE_TAG --set django.salesforce.enabled=$SALESFORCE_ENABLED --set celery.enabled=$CELERY_ENABLED --set django.celery.alwaysEager=$CELERY_ALWAYS_EAGER -f charts/spothero-django/secrets-sbx.yaml
 }
 
